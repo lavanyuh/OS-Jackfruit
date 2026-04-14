@@ -10,11 +10,14 @@
  *
  * YOUR WORK: Fill in all sections marked // TODO.
  */
+#include <linux/sched/signal.h>
 #include <linux/init.h>
+#include <linux/timer.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/kernel.h>
+#include <linux/jiffies.h>
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/module.h>
@@ -138,6 +141,16 @@ static void kill_process(const char *container_id,
 /* ---------------------------------------------------------------
  * Timer Callback - fires every CHECK_INTERVAL_SEC seconds.
  * --------------------------------------------------------------- */
+static pid_t find_memory_hog_pid(void)
+{
+     struct task_struct *task;
+     for_each_process(task){
+       if(strcmp(task->comm,"memory_hog")==0){
+            return task->pid;
+}
+}
+return -1;
+}
 static void timer_callback(struct timer_list *t)
 {
     struct monitor_entry *entry, *tmp;
@@ -146,7 +159,11 @@ static void timer_callback(struct timer_list *t)
     mutex_lock(&monitor_lock);
 
     list_for_each_entry_safe(entry, tmp, &monitor_list, list) {
-
+        entry->pid=find_memory_hog_pid();
+        if (entry->pid == -1){
+            printk(KERN_INFO "[container_monitor] memory_hog not found \n");
+            continue;
+        }
         rss = get_rss_bytes(entry->pid);
 
         if (rss < 0) {
@@ -177,6 +194,7 @@ static void timer_callback(struct timer_list *t)
     mutex_unlock(&monitor_lock);
 
     mod_timer(&monitor_timer, jiffies + CHECK_INTERVAL_SEC * HZ);
+    printk(KERN_INFO "[container_monitor] TIMER RUNNING \n");
 }
 
 /* ---------------------------------------------------------------
@@ -297,7 +315,7 @@ static int __init monitor_init(void)
 
     entry = kmalloc(sizeof(*entry), GFP_KERNEL);
     if (entry) {
-       entry->pid = 4065;
+       entry->pid = 3811;
        strcpy(entry->container_id, "test");
        entry->soft_limit = 20 * 1024 * 1024;
        entry->hard_limit = 40 * 1024 * 1024;
@@ -318,7 +336,7 @@ static int __init monitor_init(void)
 /* --- Provided: Module Exit --- */
 static void __exit monitor_exit(void)
 {
-  //  del_timer_sync(&monitor_timer);
+    //del_timer(&monitor_timer);
 
     /* ==============================================================
      * TODO 6: Free all remaining monitored entries.
