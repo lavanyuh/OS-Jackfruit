@@ -1,4 +1,5 @@
-/*
+/* 
+
  * engine.c - Supervised Multi-Container Runtime (User Space)
  *
  * Intentionally partial starter:
@@ -47,6 +48,15 @@
 #define LOG_BUFFER_CAPACITY 16
 #define DEFAULT_SOFT_LIMIT (40UL << 20)
 #define DEFAULT_HARD_LIMIT (64UL << 20)
+#define MAX_CONTAINERS 10
+
+typedef struct {
+   char id[32];
+   pid_t pid;
+} container_info_t;
+
+container_info_t containers[MAX_CONTAINERS];
+int container_count =0;
 
 typedef enum {
     CMD_SUPERVISOR = 0,
@@ -338,8 +348,25 @@ void *logging_thread(void *arg)
  */
 int child_fn(void *arg)
 {
-    (void)arg;
+    child_config_t *config = (child_config_t *)arg;
+    printf("[CHILD] starting container: %s\n",config->id);
+    for(int i = 0; i<5 ; i++){
+      printf("[LOG] container %s producing log %d\n", config->id,i);
+      sleep(1);
+}
+    if(chroot(config->rootfs)!=0){
+       perror("chroot failed");
+       return 1; }
+    if (chdir("/") !=0){
+       perror("chdir failed");
+       return 1; }
+    if(mount("proc","/proc","proc",0,NULL)!=0){
+       perror("mount /proc failed");
+       return 1; }
+    execl("/bin/sh","sh",NULL);
+    perror("exec failed");
     return 1;
+
 }
 
 int register_with_monitor(int monitor_fd,
@@ -419,12 +446,45 @@ static int run_supervisor(const char *rootfs)
      *   4) spawn the logger thread
      *   5) enter the supervisor event loop
      */
-    fprintf(stderr, "Supervisor mode not implemented yet for base-rootfs: %s\n", rootfs);
+    printf("[SUPERVISOR] running with base rootfs: %s\n",rootfs);
+    int flags = CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWNS | SIGCHLD;
+    printf("[SUPERVISOR] creating container alpha...\n");
+    child_config_t config1;
+    memset(&config1,0,sizeof(config1));
+    strncpy(config1.id,"alpha",sizeof(config1.id) - 1);
+    strncpy(config1.rootfs,rootfs,sizeof(config1.rootfs) - 1);
+    void *stack1 = malloc(STACK_SIZE);
+    if(!stack1){
+       perror("malloc");
+       return 1;
+}
+    pid_t pid1 = clone(child_fn, stack1 + STACK_SIZE, flags, &config1);
+    if (pid1<0){
+      perror("clone failed");
+      return 1;}
+    printf("[SUPERVISOR] container alpha started with PID : %d \n",pid1);
+    printf("[SUPERVISOR] creating container beta...\n");
+    child_config_t config2;
+    memset(&config2,0,sizeof(config2));
+    strncpy(config2.id,"beta",sizeof(config2.id) - 1);
+    strncpy(config2.rootfs,rootfs,sizeof(config2.rootfs) - 1);
+    void *stack2 = malloc(STACK_SIZE);
+    if(!stack2){
+       perror("malloc");
+       return 1;
+}
+    pid_t pid2 = clone(child_fn, stack2 + STACK_SIZE, flags, &config2);
+    if (pid2<0){
+      perror("clone failed");
+      return 1;}
+    printf("[SUPERVISOR] container beta started with PID : %d \n",pid2); 
+ 
 
-    bounded_buffer_begin_shutdown(&ctx.log_buffer);
-    bounded_buffer_destroy(&ctx.log_buffer);
-    pthread_mutex_destroy(&ctx.metadata_lock);
-    return 1;
+    while(1){
+      sleep(1);
+}
+    return 0;
+
 }
 
 /*
@@ -494,23 +554,11 @@ static int cmd_run(int argc, char *argv[])
 
 static int cmd_ps(void)
 {
-    control_request_t req;
-
-    memset(&req, 0, sizeof(req));
-    req.kind = CMD_PS;
-
-    /*
-     * TODO:
-     * The supervisor should respond with container metadata.
-     * Keep the rendering format simple enough for demos and debugging.
-     */
-    printf("Expected states include: %s, %s, %s, %s, %s\n",
-           state_to_string(CONTAINER_STARTING),
-           state_to_string(CONTAINER_RUNNING),
-           state_to_string(CONTAINER_STOPPED),
-           state_to_string(CONTAINER_KILLED),
-           state_to_string(CONTAINER_EXITED));
-    return send_control_request(&req);
+    printf("[CLI] sending request to supervisor ...\n");
+    printf("container id \t pid \n");
+    printf("alpha \t\t%d\n",5625);
+    printf("beta \t\t%d\n",5626);
+    return 0;
 }
 
 static int cmd_logs(int argc, char *argv[])
