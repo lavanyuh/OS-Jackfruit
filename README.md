@@ -137,10 +137,6 @@ soft limits (warnings)
 
 hard limits (process termination)
 
-IPC Mechanism
-
-Communication between CLI and supervisor is done using a control interface.
-This allows commands like ps to query container state.
 
 ### IPC Mechanism
 
