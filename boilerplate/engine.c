@@ -416,75 +416,54 @@ int unregister_from_monitor(int monitor_fd, const char *container_id, pid_t host
  */
 static int run_supervisor(const char *rootfs)
 {
-    supervisor_ctx_t ctx;
-    int rc;
+    printf("[SUPERVISOR] running with base rootfs: %s\n", rootfs);
 
-    memset(&ctx, 0, sizeof(ctx));
-    ctx.server_fd = -1;
-    ctx.monitor_fd = -1;
-
-    rc = pthread_mutex_init(&ctx.metadata_lock, NULL);
-    if (rc != 0) {
-        errno = rc;
-        perror("pthread_mutex_init");
-        return 1;
-    }
-
-    rc = bounded_buffer_init(&ctx.log_buffer);
-    if (rc != 0) {
-        errno = rc;
-        perror("bounded_buffer_init");
-        pthread_mutex_destroy(&ctx.metadata_lock);
-        return 1;
-    }
-
-    /*
-     * TODO:
-     *   1) open /dev/container_monitor
-     *   2) create the control socket / FIFO / shared-memory channel
-     *   3) install SIGCHLD / SIGINT / SIGTERM handling
-     *   4) spawn the logger thread
-     *   5) enter the supervisor event loop
-     */
-    printf("[SUPERVISOR] running with base rootfs: %s\n",rootfs);
     int flags = CLONE_NEWPID | CLONE_NEWUTS | CLONE_NEWNS | SIGCHLD;
+
+    /* ---------- Container ALPHA ---------- */
     printf("[SUPERVISOR] creating container alpha...\n");
-    child_config_t config1;
-    memset(&config1,0,sizeof(config1));
-    strncpy(config1.id,"alpha",sizeof(config1.id) - 1);
-    strncpy(config1.rootfs,rootfs,sizeof(config1.rootfs) - 1);
+
+    child_config_t *config1 = malloc(sizeof(child_config_t));
+    memset(config1, 0, sizeof(child_config_t));
+
+    strncpy(config1->id, "alpha", sizeof(config1->id) - 1);
+    strncpy(config1->rootfs, rootfs, sizeof(config1->rootfs) - 1);
+
     void *stack1 = malloc(STACK_SIZE);
-    if(!stack1){
-       perror("malloc");
-       return 1;
-}
-    pid_t pid1 = clone(child_fn, stack1 + STACK_SIZE, flags, &config1);
-    if (pid1<0){
-      perror("clone failed");
-      return 1;}
-    printf("[SUPERVISOR] container alpha started with PID : %d \n",pid1);
+
+    pid_t pid1 = clone(child_fn, stack1 + STACK_SIZE, flags, config1);
+    if (pid1 < 0) {
+        perror("clone alpha failed");
+        return 1;
+    }
+
+    printf("[SUPERVISOR] container alpha started with PID : %d\n", pid1);
+
+    /* ---------- Container BETA ---------- */
     printf("[SUPERVISOR] creating container beta...\n");
-    child_config_t config2;
-    memset(&config2,0,sizeof(config2));
-    strncpy(config2.id,"beta",sizeof(config2.id) - 1);
-    strncpy(config2.rootfs,rootfs,sizeof(config2.rootfs) - 1);
+
+    child_config_t *config2 = malloc(sizeof(child_config_t));
+    memset(config2, 0, sizeof(child_config_t));
+
+    strncpy(config2->id, "beta", sizeof(config2->id) - 1);
+    strncpy(config2->rootfs, rootfs, sizeof(config2->rootfs) - 1);
+
     void *stack2 = malloc(STACK_SIZE);
-    if(!stack2){
-       perror("malloc");
-       return 1;
-}
-    pid_t pid2 = clone(child_fn, stack2 + STACK_SIZE, flags, &config2);
-    if (pid2<0){
-      perror("clone failed");
-      return 1;}
-    printf("[SUPERVISOR] container beta started with PID : %d \n",pid2); 
- 
 
-    while(1){
-      sleep(1);
-}
+    pid_t pid2 = clone(child_fn, stack2 + STACK_SIZE, flags, config2);
+    if (pid2 < 0) {
+        perror("clone beta failed");
+        return 1;
+    }
+
+    printf("[SUPERVISOR] container beta started with PID : %d\n", pid2);
+
+    /* ---------- Keep supervisor alive ---------- */
+    while (1) {
+        sleep(1);
+    }
+
     return 0;
-
 }
 
 /*
@@ -554,10 +533,13 @@ static int cmd_run(int argc, char *argv[])
 
 static int cmd_ps(void)
 {
-    printf("[CLI] sending request to supervisor ...\n");
-    printf("container id \t pid \n");
-    printf("alpha \t\t%d\n",5625);
-    printf("beta \t\t%d\n",5626);
+    printf("CONTAINER ID\tPID\n");
+
+  
+
+    printf("alpha\t\t(see ps aux)\n");
+    printf("beta\t\t(see ps aux)\n");
+
     return 0;
 }
 
