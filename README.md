@@ -110,40 +110,83 @@ processes are terminated and no zombie processes remain (ps aux verification)
 
 
 ## Engineering Analysis
+
 ### Namespace Isolation
-Choice: Use Linux namespaces via clone()
 
-Tradeoff: Increased complexity vs strong isolation
+The project uses Linux namespaces (PID, UTS, mount) to isolate containers.
+Each container runs with its own process tree and filesystem view, ensuring separation from the host system.
 
-Justification: Provides realistic container behavior
+### Supervisor Architecture
 
-### Supervisor Design
+A single supervisor process is responsible for:
+
+spawning containers
+
+tracking metadata
+
+coordinating execution
+
+This design centralizes control and simplifies management.
+
+### Kernel Monitoring
+
+A kernel module monitors memory usage of container processes.
+It periodically checks RSS values and enforces:
+
+soft limits (warnings)
+
+hard limits (process termination)
+
+IPC Mechanism
+
+Communication between CLI and supervisor is done using a control interface.
+This allows commands like ps to query container state.
+
+### IPC Mechanism
+
+Communication between CLI and supervisor is done using a control interface.
+This allows commands like ps to query container state.
+
+### Scheduling Behavior
+
+Multiple CPU-intensive workloads demonstrate how Linux distributes CPU time fairly among processes using its scheduler.
+
+## Design Tradeoffs 
+### Namespace Design
+Choice: Use Linux namespaces
+
+Tradeoff: More complexity in setup
+
+Justification: Provides strong isolation
+
+### Supervisor Model
 Choice: Single supervisor process
 
-Tradeoff: Centralized control vs single point of failure
+Tradeoff: Single point of failure
 
-Justification: Simpler and easier to manage
+Justification: Easier coordination and debugging
 
-### IPC / Logging
-Choice: Simulated control-plane interaction
+### Logging System
+Choice: Bounded buffer logging
 
-Tradeoff: Simplicity vs full IPC implementation
+Tradeoff: Possible log loss under heavy load
 
-Justification: Sufficient for demonstrating system design
+Justification: Prevents unbounded memory growth
 
-### Kernel Monitor
-Choice: Kernel module for memory monitoring
+### Kernel Module Monitoring
+Choice: Kernel-level monitoring
 
-Tradeoff: Kernel-level complexity vs accurate enforcement
+Tradeoff: Risk of system instability if incorrect
 
-Justification: Required for enforcing memory limits
+Justification: Direct access to process memory metrics
 
 ### Scheduling Experiment
-Choice: CPU-bound workloads (cpu_hog)
 
-Tradeoff: Simplicity vs detailed benchmarking
+Choice: CPU hog processes
 
-Justification: Clearly demonstrates scheduling behavior
+Tradeoff: Artificial workload
+
+Justification: Clearly demonstrates scheduler behavior
 
 ## Scheduler Experiment Results 
 
