@@ -98,9 +98,10 @@ kernel logs show container termination after exceeding hard limit
 
 
 7.
-![s7](https://github.com/user-attachments/assets/5f7fbef8-6ddd-4d4d-96c6-9c5d95efc21b)
+<img width="624" height="370" alt="ss" src="https://github.com/user-attachments/assets/30a86cf7-686c-47ae-8456-98b782cd03eb" />
 
-CPU-intensive workloads (cpu_hog) shows observable CPU usage differences 
+
+Three CPU-bound processes pinned to the same CPU core using taskset, with one process assigned a lower priority via renice, demonstrating priority-based CPU scheduling
 
 
 8.
@@ -186,31 +187,43 @@ Justification: Clearly demonstrates scheduler behavior
 
 ## Scheduler Experiment Results 
 
-### Observed output
-![s8](https://github.com/user-attachments/assets/2b68fbc1-3221-4f4d-bff9-1abeb600d2a6)
+
+### Observed Output
+
+Three CPU-bound processes were pinned to the same CPU core using `taskset`, and one process was assigned a lower priority using `renice`.
+<img width="624" height="370" alt="ss" src="https://github.com/user-attachments/assets/19d3a681-4674-4da4-8704-62c02f66af52" />
+
+
+From the observed output:
+
+- Two processes (default priority) used ~47% CPU each  
+- One process (lower priority, NI=10) used only ~5% CPU  
+
+---
 
 ### Analysis
-- Multiple cpu_hog processes were run simultaneously.
 
-- Each process consumed a high percentage of CPU (close to 100%).
+- All processes were competing for the same CPU core  
+- The Linux scheduler distributed CPU time based on priority  
+- Higher priority processes received significantly more CPU time  
+- The lower priority process was still scheduled, but less frequently  
 
-- The CPU usage was distributed between processes rather than one process monopolizing the CPU.
+---
 
 ### Key Observations
-- The Linux scheduler shares CPU time across competing processes.
-  
-- Even though both processes are CPU-intensive, they are scheduled fairly.
-  
-- Slight differences in CPU usage (e.g., 99.9% vs 94.7%) occur due to scheduling decisions and system overhead.
-Conclusion
 
-### This experiment demonstrates that the Linux scheduler:
+- CPU scheduling is **priority-aware**, not strictly equal  
+- Nice values directly influence CPU allocation  
+- Lower priority processes are not starved, but receive reduced CPU time  
 
-- Allocates CPU time fairly among runnable processes
-  
-- Prevents starvation
-  
-- Efficiently handles CPU-bound workloads
+---
+
+### Conclusion
+
+This experiment demonstrates that the Linux scheduler:
+- respects process priority (nice values)  
+- allocates CPU time unevenly when priorities differ  
+- ensures fairness while still prioritizing higher-priority tasks  
 
 
 
